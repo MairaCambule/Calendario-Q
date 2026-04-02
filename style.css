@@ -100,26 +100,6 @@ button { cursor:pointer; transition:.25s; }
 .fc .fc-prev-button:hover, .fc .fc-next-button:hover { background: var(--fc-prim-hover); }
 
 
-.home-button {
-  position: absolute;      /* mantém fixo no ecrã */
-  top: 15px;
-  right: 15px;
-  background-color:  #7b6cff;
-  color: white;
-  padding: 10px 16px;
-  border-radius: 8px;
-  text-decoration: none;
-  font-weight: bold;
-  transition: background-color 0.3s;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  font-family: Arial, sans-serif;
-  z-index: 9999;        /* garante que fica por cima do calendário */
-}
-
-.home-button:hover {
-  background-color: #6a59ff;
-}
-
 /* --- Mini-modal escolher deleção --- */
 #deleteDialog .modal-content {
   width: 420px;
