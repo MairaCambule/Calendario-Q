@@ -19,7 +19,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const eventsCol = collection(db, "events_qualidade");
+const eventsQual = collection(db, "events_qualidade");
+const eventsCol = collection(db, "COLLECTION_NAME");
 
 // Cores por tipo
 const TYPE_COLORS = {
@@ -72,7 +73,7 @@ async function deleteWholeSeries(seriesId) {
   const qSeries = query(eventsCol, where("seriesId", "==", seriesId));
   const snap = await getDocs(qSeries);
   const tasks = [];
-  snap.forEach(d => tasks.push(deleteDoc(doc(db, "events", d.id))));
+  snap.forEach(d => tasks.push(deleteDoc(doc(db, "COLLECTION_NAME", d.id))));
   await Promise.all(tasks);
 }
 // Apagar série e remover do calendário (UX imediato)
@@ -92,7 +93,7 @@ async function deleteLegacySeriesAllTime({ title, type, colaborador }) {
   );
   const snap = await getDocs(qLegacy);
   const tasks = [];
-  snap.forEach(d => tasks.push(deleteDoc(doc(db, "events", d.id))));
+  snap.forEach(d => tasks.push(deleteDoc(doc(db, "COLLECTION_NAME", d.id))));
   await Promise.all(tasks);
 }
 
@@ -133,7 +134,7 @@ async function createEventDoc({ title, type, colaborador, desc, allDay, startISO
   return addDoc(eventsCol, payload);
 }
 async function updateEventDoc(id, payload) {
-  const ref = doc(db, "events", id);
+  const ref = doc(db, "COLLECTION_NAME", id);
   let { title, type, colaborador, desc, allDay, startISOorYMD, endISOorYMD, seriesId } = payload;
   const startTs = allDay ? Timestamp.fromDate(new Date(`${startISOorYMD}T00:00:00`)) : Timestamp.fromDate(new Date(startISOorYMD));
   const endTs = allDay ? Timestamp.fromDate(new Date(`${endISOorYMD}T00:00:00`)) : Timestamp.fromDate(new Date(endISOorYMD));
@@ -141,7 +142,7 @@ async function updateEventDoc(id, payload) {
   if (seriesId !== undefined) upd.seriesId = seriesId || null;
   return updateDoc(ref, upd);
 }
-async function removeEvent(id) { return deleteDoc(doc(db, "events", id)); }
+async function removeEvent(id) { return deleteDoc(doc(db, "COLLECTION_NAME", id)); }
 
 // Recorrência
 function* iterateRecurrences({ startYMD, endYMD, startHM, endHM, allDay, freq, untilYMD }) {
