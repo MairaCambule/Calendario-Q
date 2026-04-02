@@ -15,12 +15,10 @@ const firebaseConfig = {
   appId: "1:519300088400:web:31d9516e869164d5b94755",
 };
 
-
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const eventsQual = collection(db, "events_qualidade");
-const eventsCol = collection(db, "COLLECTION_NAME");
+const COLLECTION_NAME = "events_qualidade";
+const eventsCol = collection(db, COLLECTION_NAME);
 
 // Cores por tipo
 const TYPE_COLORS = {
@@ -33,18 +31,20 @@ const TYPE_COLORS = {
 };
 
 // === Helpers ===
-// helpers para não bloquear a UI e validar datas os 1ºs 2
-function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-function dateOnlyISO(ymd){ return new Date(ymd + "T00:00:00"); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function dateOnlyISO(ymd) { return new Date(ymd + "T00:00:00"); }
 
 const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : (Date.now() + "-" + Math.random().toString(16).slice(2)));
 function pad2(n) { return String(n).padStart(2, "0"); }
 function toYYYYMMDD(date) { return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`; }
+
 function addDaysYYYYMMDD(dateStr, days) {
   const [y, m, d] = dateStr.split("-").map(Number);
-  const dt = new Date(y, m - 1, d); dt.setDate(dt.getDate() + days);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
   return toYYYYMMDD(dt);
 }
+
 function normalizeToYMD(value) {
   if (!value) return "";
   if (value && typeof value === "object" && typeof value.toDate === "function") {
@@ -53,12 +53,17 @@ function normalizeToYMD(value) {
   if (typeof value === "string") return value;
   try { return toYYYYMMDD(new Date(value)); } catch { return ""; }
 }
-function toISO(dateYMD, timeHM) { return `${dateYMD}T${timeHM || "00:00"}:00`; }
+
+function toISO(dateYMD, timeHM) {
+  return `${dateYMD}T${timeHM || "00:00"}:00`;
+}
+
 function diffDaysInclusive(startYMD, endYMD) {
   const s = new Date(startYMD + "T00:00:00");
   const e = new Date(endYMD + "T00:00:00");
   return Math.round((e - s) / (24 * 3600 * 1000)) + 1;
 }
+
 // Está dentro da vista atual [start, end)?
 function isEventInCurrentView(ev, viewStart, viewEnd) {
   const start = ev.start ? ev.start : (ev.startStr ? new Date(ev.startStr) : null);
@@ -73,9 +78,10 @@ async function deleteWholeSeries(seriesId) {
   const qSeries = query(eventsCol, where("seriesId", "==", seriesId));
   const snap = await getDocs(qSeries);
   const tasks = [];
-  snap.forEach(d => tasks.push(deleteDoc(doc(db, "COLLECTION_NAME", d.id))));
+  snap.forEach(d => tasks.push(deleteDoc(doc(db, COLLECTION_NAME, d.id))));
   await Promise.all(tasks);
 }
+
 // Apagar série e remover do calendário (UX imediato)
 async function deleteWholeSeriesClient(seriesId, calendar) {
   await deleteWholeSeries(seriesId);
@@ -83,7 +89,8 @@ async function deleteWholeSeriesClient(seriesId, calendar) {
     if (ev.extendedProps.seriesId === seriesId) ev.remove();
   });
 }
-// Séries antigas sem seriesId: apaga TODOS com mesmo title/type/colaborador (sem intervalo)
+
+// Séries antigas sem seriesId: apaga TODOS com mesmo title/type/colaborador
 async function deleteLegacySeriesAllTime({ title, type, colaborador }) {
   const qLegacy = query(
     eventsCol,
@@ -93,7 +100,7 @@ async function deleteLegacySeriesAllTime({ title, type, colaborador }) {
   );
   const snap = await getDocs(qLegacy);
   const tasks = [];
-  snap.forEach(d => tasks.push(deleteDoc(doc(db, "COLLECTION_NAME", d.id))));
+  snap.forEach(d => tasks.push(deleteDoc(doc(db, COLLECTION_NAME, d.id))));
   await Promise.all(tasks);
 }
 
@@ -113,7 +120,12 @@ function docToEvent(docSnap) {
       start: s,
       end: e ? addDaysYYYYMMDD(e, 1) : "",
       allDay: true,
-      extendedProps: { type: data.type || "", colaborador: data.colaborador || "", desc, seriesId }
+      extendedProps: {
+        type: data.type || "",
+        colaborador: data.colaborador || "",
+        desc,
+        seriesId
+      }
     };
   } else {
     const start = data.start?.toDate ? data.start.toDate().toISOString() : data.start;
@@ -121,32 +133,63 @@ function docToEvent(docSnap) {
     return {
       id: docSnap.id,
       title: data.title || `${data.type || "Evento"} - ${data.colaborador || ""}`.trim(),
-      start, end, allDay: false,
-      extendedProps: { type: data.type || "", colaborador: data.colaborador || "", desc, seriesId }
+      start,
+      end,
+      allDay: false,
+      extendedProps: {
+        type: data.type || "",
+        colaborador: data.colaborador || "",
+        desc,
+        seriesId
+      }
     };
   }
 }
+
 async function createEventDoc({ title, type, colaborador, desc, allDay, startISOorYMD, endISOorYMD, seriesId }) {
-  const startTs = allDay ? Timestamp.fromDate(new Date(`${startISOorYMD}T00:00:00`)) : Timestamp.fromDate(new Date(startISOorYMD));
-  const endTs = allDay ? Timestamp.fromDate(new Date(`${endISOorYMD}T00:00:00`)) : Timestamp.fromDate(new Date(endISOorYMD));
+  const startTs = allDay
+    ? Timestamp.fromDate(new Date(`${startISOorYMD}T00:00:00`))
+    : Timestamp.fromDate(new Date(startISOorYMD));
+
+  const endTs = allDay
+    ? Timestamp.fromDate(new Date(`${endISOorYMD}T00:00:00`))
+    : Timestamp.fromDate(new Date(endISOorYMD));
+
   const payload = { title, type, colaborador, desc, allDay, start: startTs, end: endTs };
   if (seriesId) payload.seriesId = seriesId;
   return addDoc(eventsCol, payload);
 }
+
 async function updateEventDoc(id, payload) {
-  const ref = doc(db, "COLLECTION_NAME", id);
-  let { title, type, colaborador, desc, allDay, startISOorYMD, endISOorYMD, seriesId } = payload;
-  const startTs = allDay ? Timestamp.fromDate(new Date(`${startISOorYMD}T00:00:00`)) : Timestamp.fromDate(new Date(startISOorYMD));
-  const endTs = allDay ? Timestamp.fromDate(new Date(`${endISOorYMD}T00:00:00`)) : Timestamp.fromDate(new Date(endISOorYMD));
+  const ref = doc(db, COLLECTION_NAME, id);
+  const { title, type, colaborador, desc, allDay, startISOorYMD, endISOorYMD, seriesId } = payload;
+
+  const startTs = allDay
+    ? Timestamp.fromDate(new Date(`${startISOorYMD}T00:00:00`))
+    : Timestamp.fromDate(new Date(startISOorYMD));
+
+  const endTs = allDay
+    ? Timestamp.fromDate(new Date(`${endISOorYMD}T00:00:00`))
+    : Timestamp.fromDate(new Date(endISOorYMD));
+
   const upd = { title, type, colaborador, desc, allDay, start: startTs, end: endTs };
   if (seriesId !== undefined) upd.seriesId = seriesId || null;
+
   return updateDoc(ref, upd);
 }
-async function removeEvent(id) { return deleteDoc(doc(db, "COLLECTION_NAME", id)); }
+
+async function removeEvent(id) {
+  return deleteDoc(doc(db, COLLECTION_NAME, id));
+}
 
 // Recorrência
 function* iterateRecurrences({ startYMD, endYMD, startHM, endHM, allDay, freq, untilYMD }) {
-  const addMap = { weekly: d => d.setDate(d.getDate() + 7), monthly: d => d.setMonth(d.getMonth() + 1), yearly: d => d.setFullYear(d.getFullYear() + 1) };
+  const addMap = {
+    weekly: d => d.setDate(d.getDate() + 7),
+    monthly: d => d.setMonth(d.getMonth() + 1),
+    yearly: d => d.setFullYear(d.getFullYear() + 1)
+  };
+
   const addFn = addMap[freq];
   const durDays = allDay ? diffDaysInclusive(startYMD, endYMD) : null;
   let cur = new Date(startYMD + "T00:00:00");
@@ -154,12 +197,14 @@ function* iterateRecurrences({ startYMD, endYMD, startHM, endHM, allDay, freq, u
 
   while (true) {
     const occStartYMD = toYYYYMMDD(cur);
+
     if (allDay) {
       const occEndYMD = addDaysYYYYMMDD(occStartYMD, durDays - 1);
       yield { startYMD: occStartYMD, endYMD: occEndYMD, allDay: true };
     } else {
       yield { startISO: toISO(occStartYMD, startHM), endISO: toISO(occStartYMD, endHM), allDay: false };
     }
+
     if (!addFn) break;
     addFn(cur);
     if (until && cur > until) break;
@@ -167,14 +212,19 @@ function* iterateRecurrences({ startYMD, endYMD, startHM, endHM, allDay, freq, u
 }
 
 // Tooltip positioning
-function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
 function placeTooltipNearEl(modalContentEl, anchorEl) {
   const rect = anchorEl.getBoundingClientRect();
   const W = modalContentEl.offsetWidth || 380;
   const H = modalContentEl.offsetHeight || 260;
   const margin = 10, vw = window.innerWidth, vh = window.innerHeight;
 
-  let top = rect.bottom + margin, left = rect.left;
+  let top = rect.bottom + margin;
+  let left = rect.left;
+
   if (top + H > vh) top = rect.top - H - margin;
   if (top < margin) top = clamp(vh / 2 - H / 2, margin, vh - H - margin);
   left = clamp(left, margin, vw - W - margin);
@@ -182,12 +232,14 @@ function placeTooltipNearEl(modalContentEl, anchorEl) {
   modalContentEl.style.top = `${top}px`;
   modalContentEl.style.left = `${left}px`;
 }
+
 function placeTooltipAtPoint(modalContentEl, x, y) {
   const W = modalContentEl.offsetWidth || 380;
   const H = modalContentEl.offsetHeight || 260;
   const margin = 10, vw = window.innerWidth, vh = window.innerHeight;
 
   let top = y + margin, left = x + margin;
+
   if (top + H > vh) top = y - H - margin;
   if (left + W > vw) left = x - W - margin;
   if (top < margin) top = clamp(vh / 2 - H / 2, margin, vh - H - margin);
@@ -219,6 +271,7 @@ function askDeleteChoiceModal() {
       document.removeEventListener("click", onBackdrop);
       resolve(result);
     };
+
     const onAll = () => close("all");
     const onOne = () => close("one");
     const onCancel = () => close("cancel");
@@ -240,6 +293,7 @@ function askDeleteChoiceModal() {
     dlg.setAttribute("aria-hidden", "false");
   });
 }
+
 // Fallback (prompt) caso o modal não exista
 function askDeleteChoicePrompt() {
   const resp = prompt("Apagar evento:\n1) Apagar TODAS as repetições\n2) Apagar apenas esta ocorrência\n3) Cancelar", "2");
@@ -249,6 +303,7 @@ function askDeleteChoicePrompt() {
   if (v === "2") return "one";
   return "cancel";
 }
+
 // Escolhe modal se existir; senão, prompt
 async function chooseDeleteChoice() {
   const dlg = document.getElementById("deleteDialog");
@@ -260,7 +315,10 @@ async function chooseDeleteChoice() {
 let eventsCache = [];
 let selectedEvent = null;
 let lastMouse = { x: 200, y: 200 };
-document.addEventListener("mousemove", (e) => { lastMouse = { x: e.clientX, y: e.clientY }; });
+
+document.addEventListener("mousemove", (e) => {
+  lastMouse = { x: e.clientX, y: e.clientY };
+});
 
 // ======= INIT ROBUSTO =======
 function init() {
@@ -301,8 +359,26 @@ function init() {
   const cUntil = document.getElementById("createRepeatUntil");
   const cSave = document.getElementById("createSave");
 
-  const toggleCreateTimeFields = () => { const all = cAllD.checked; cST.disabled = all; cET.disabled = all; if (all) { cST.value = ""; cET.value = ""; } };
-  const toggleEditTimeFields = () => { const all = eAllD.checked; eST.disabled = all; eET.disabled = all; if (all) { eST.value = ""; eET.value = ""; } };
+  const toggleCreateTimeFields = () => {
+    const all = cAllD.checked;
+    cST.disabled = all;
+    cET.disabled = all;
+    if (all) {
+      cST.value = "";
+      cET.value = "";
+    }
+  };
+
+  const toggleEditTimeFields = () => {
+    const all = eAllD.checked;
+    eST.disabled = all;
+    eET.disabled = all;
+    if (all) {
+      eST.value = "";
+      eET.value = "";
+    }
+  };
+
   cAllD.addEventListener("change", toggleCreateTimeFields);
   eAllD.addEventListener("change", toggleEditTimeFields);
 
@@ -312,27 +388,40 @@ function init() {
     selectable: true,
     selectMirror: true,
     editable: true,
-    headerToolbar: { left: "prev,next today", center: "title", right: "dayGridMonth,timeGridWeek,listYear" },
+    headerToolbar: {
+      left: "prev,next today",
+      center: "title",
+      right: "dayGridMonth,timeGridWeek,listYear"
+    },
 
     dateClick: (info) => {
-      closeEdit(); // um tooltip por vez
-      openCreateTooltip({ dateYMD: info.dateStr, endYMD: info.dateStr, allDay: true },
-        { anchorEl: info.dayEl, point: info.jsEvent ? { x: info.jsEvent.clientX, y: info.jsEvent.clientY } : null });
+      closeEdit();
+      openCreateTooltip(
+        { dateYMD: info.dateStr, endYMD: info.dateStr, allDay: true },
+        { anchorEl: info.dayEl, point: info.jsEvent ? { x: info.jsEvent.clientX, y: info.jsEvent.clientY } : null }
+      );
     },
+
     select: (info) => {
       closeEdit();
       if (info.allDay) {
-        openCreateTooltip({ dateYMD: info.startStr, endYMD: addDaysYYYYMMDD(info.endStr, -1), allDay: true },
-          { point: lastMouse });
+        openCreateTooltip(
+          { dateYMD: info.startStr, endYMD: addDaysYYYYMMDD(info.endStr, -1), allDay: true },
+          { point: lastMouse }
+        );
       } else {
         const s = info.start, e = info.end || info.start;
         const sY = toYYYYMMDD(s);
-        openCreateTooltip({
-          dateYMD: sY, endYMD: sY, allDay: false,
-          startHM: `${pad2(s.getHours())}:${pad2(s.getMinutes())}`,
-          endHM: `${pad2(e.getHours())}:${pad2(e.getMinutes())}`
-        },
-          { point: lastMouse });
+        openCreateTooltip(
+          {
+            dateYMD: sY,
+            endYMD: sY,
+            allDay: false,
+            startHM: `${pad2(s.getHours())}:${pad2(s.getMinutes())}`,
+            endHM: `${pad2(e.getHours())}:${pad2(e.getMinutes())}`
+          },
+          { point: lastMouse }
+        );
       }
     },
 
@@ -345,20 +434,22 @@ function init() {
     },
 
     eventClick: (info) => {
-      closeCreate(); // um tooltip por vez
+      closeCreate();
       selectedEvent = info.event;
 
       eType.value = info.event.extendedProps.type || "";
       eCol.value = info.event.extendedProps.colaborador || "";
       eDesc.value = info.event.extendedProps.desc || "";
-      eRep.value = "none";  // default (só altera se usar série)
+      eRep.value = "none";
       eUntil.value = "";
 
       if (info.event.allDay) {
         eAllD.checked = true;
         eSD.value = info.event.startStr;
         eED.value = info.event.endStr ? addDaysYYYYMMDD(info.event.endStr, -1) : info.event.startStr;
-        eST.value = ""; eET.value = ""; toggleEditTimeFields();
+        eST.value = "";
+        eET.value = "";
+        toggleEditTimeFields();
       } else {
         eAllD.checked = false;
         const s = info.event.start, e = info.event.end || info.event.start;
@@ -368,6 +459,7 @@ function init() {
         eET.value = `${pad2(e.getHours())}:${pad2(e.getMinutes())}`;
         toggleEditTimeFields();
       }
+
       eventModal.classList.remove("hidden");
       requestAnimationFrame(() => placeTooltipNearEl(eventBox, info.el));
     },
@@ -377,16 +469,29 @@ function init() {
       try {
         if (ev.allDay) {
           await updateEventDoc(ev.id, {
-            title: ev.title, type: ev.extendedProps.type || "", colaborador: ev.extendedProps.colaborador || "", desc: ev.extendedProps.desc || "",
-            allDay: true, startISOorYMD: ev.startStr, endISOorYMD: ev.endStr ? addDaysYYYYMMDD(ev.endStr, -1) : ev.startStr
+            title: ev.title,
+            type: ev.extendedProps.type || "",
+            colaborador: ev.extendedProps.colaborador || "",
+            desc: ev.extendedProps.desc || "",
+            allDay: true,
+            startISOorYMD: ev.startStr,
+            endISOorYMD: ev.endStr ? addDaysYYYYMMDD(ev.endStr, -1) : ev.startStr
           });
         } else {
           await updateEventDoc(ev.id, {
-            title: ev.title, type: ev.extendedProps.type || "", colaborador: ev.extendedProps.colaborador || "", desc: ev.extendedProps.desc || "",
-            allDay: false, startISOorYMD: ev.start.toISOString(), endISOorYMD: ev.end ? ev.end.toISOString() : ev.start.toISOString()
+            title: ev.title,
+            type: ev.extendedProps.type || "",
+            colaborador: ev.extendedProps.colaborador || "",
+            desc: ev.extendedProps.desc || "",
+            allDay: false,
+            startISOorYMD: ev.start.toISOString(),
+            endISOorYMD: ev.end ? ev.end.toISOString() : ev.start.toISOString()
           });
         }
-      } catch (e) { console.error(e); info.revert(); }
+      } catch (e) {
+        console.error(e);
+        info.revert();
+      }
     },
 
     eventResize: async (info) => {
@@ -394,18 +499,32 @@ function init() {
       try {
         if (ev.allDay) {
           await updateEventDoc(ev.id, {
-            title: ev.title, type: ev.extendedProps.type || "", colaborador: ev.extendedProps.colaborador || "", desc: ev.extendedProps.desc || "",
-            allDay: true, startISOorYMD: ev.startStr, endISOorYMD: ev.endStr ? addDaysYYYYMMDD(ev.endStr, -1) : ev.startStr
+            title: ev.title,
+            type: ev.extendedProps.type || "",
+            colaborador: ev.extendedProps.colaborador || "",
+            desc: ev.extendedProps.desc || "",
+            allDay: true,
+            startISOorYMD: ev.startStr,
+            endISOorYMD: ev.endStr ? addDaysYYYYMMDD(ev.endStr, -1) : ev.startStr
           });
         } else {
           await updateEventDoc(ev.id, {
-            title: ev.title, type: ev.extendedProps.type || "", colaborador: ev.extendedProps.colaborador || "", desc: ev.extendedProps.desc || "",
-            allDay: false, startISOorYMD: ev.start.toISOString(), endISOorYMD: ev.end ? ev.end.toISOString() : ev.start.toISOString()
+            title: ev.title,
+            type: ev.extendedProps.type || "",
+            colaborador: ev.extendedProps.colaborador || "",
+            desc: ev.extendedProps.desc || "",
+            allDay: false,
+            startISOorYMD: ev.start.toISOString(),
+            endISOorYMD: ev.end ? ev.end.toISOString() : ev.start.toISOString()
           });
         }
-      } catch (e) { console.error(e); info.revert(); }
+      } catch (e) {
+        console.error(e);
+        info.revert();
+      }
     }
   });
+
   calendar.render();
 
   // Firestore live
@@ -416,24 +535,30 @@ function init() {
   });
 
   function applyFilters() {
-    const t = filterTypeEl.value, c = filterColEl.value;
+    const t = filterTypeEl.value;
+    const c = filterColEl.value;
+
     const filtered = eventsCache.filter(ev => {
       const okT = !t || ev.extendedProps.type === t;
       const col = ev.extendedProps.colaborador || "";
       const okC = !c || col === c || col === "Todos";
       return okT && okC;
     });
+
     calendar.removeAllEvents();
     calendar.addEventSource(filtered);
   }
+
   filterTypeEl.addEventListener("change", applyFilters);
   filterColEl.addEventListener("change", applyFilters);
 
   // ====== CRIAR (tooltip) ======
   function openCreateTooltip({ dateYMD, endYMD, allDay, startHM, endHM }, pos) {
-    closeEdit(); // garante único tooltip
+    closeEdit();
 
-    cType.value = ""; cCol.value = ""; cDesc.value = "";
+    cType.value = "";
+    cCol.value = "";
+    cDesc.value = "";
     cAllD.checked = (allDay !== false);
     cSD.value = dateYMD;
     cED.value = endYMD || dateYMD;
@@ -452,11 +577,14 @@ function init() {
       else placeTooltipAtPoint(createBox, window.innerWidth / 2, window.innerHeight / 2);
     });
   }
+
   function closeCreate() {
     createModal.classList.add("hidden");
     createModal.setAttribute("aria-hidden", "true");
   }
+
   cClose.addEventListener("click", closeCreate);
+
   document.addEventListener("click", (e) => {
     if (createModal.classList.contains("hidden")) return;
     const inside = createBox.contains(e.target);
@@ -465,112 +593,129 @@ function init() {
   });
 
   cSave.addEventListener("click", () => {
-  // 1) Ler e validar inputs
-  const type = cType.value, col = cCol.value, desc = cDesc.value;
-  const allD = cAllD.checked;
-  const sY = cSD.value, eY = cED.value || sY;
-  if (!type || !col || !sY){
-    alert("Preencha tipo, colaborador e data de início.");
-    return;
-  }
+    const type = cType.value, col = cCol.value, desc = cDesc.value;
+    const allD = cAllD.checked;
+    const sY = cSD.value, eY = cED.value || sY;
 
-  // repetição
-  const freq  = cRep.value;           // none | weekly | monthly | yearly
-  const until = cUntil.value;         // YYYY-MM-DD
-  const hasRepeat = (freq !== "none");
-
-  if (hasRepeat){
-    if (!until){
-      alert("Para repetir, escolha uma data 'Até'.");
+    if (!type || !col || !sY) {
+      alert("Preencha tipo, colaborador e data de início.");
       return;
     }
-    if (dateOnlyISO(until) < dateOnlyISO(sY)){
-      alert("A data 'Até' não pode ser anterior ao início.");
-      return;
-    }
-  }
 
-  // 2) Fechar o tooltip JÁ (UX)
-  closeCreate();
+    const freq = cRep.value;
+    const until = cUntil.value;
+    const hasRepeat = (freq !== "none");
 
-  // 3) Fazer o trabalho pesado depois do repaint
-  setTimeout(async () => {
-    try {
-      const sid = hasRepeat ? uuid() : null;
-
-      // Gerador de ocorrências
-      const genParams = {
-        startYMD: sY, endYMD: eY,
-        startHM: cST.value || "00:00",
-        endHM:   cET.value || (cST.value || "00:00"),
-        allDay: allD, freq, untilYMD: until
-      };
-
-      const MAX_OCC = 500; // segurança
-      let i = 0;
-
-      // Se não repetir, cria só uma ocorrência manualmente (mais rápido)
-      if (!hasRepeat){
-        const title = `${type} - ${col}`;
-        if (allD){
-          await createEventDoc({
-            title, type, colaborador: col, desc, allDay: true,
-            startISOorYMD: sY, endISOorYMD: eY, seriesId: null
-          });
-        } else {
-          const sISO = toISO(sY, cST.value || "00:00");
-          const eISO = toISO(sY, cET.value || (cST.value || "00:00"));
-          await createEventDoc({
-            title, type, colaborador: col, desc, allDay: false,
-            startISOorYMD: sISO, endISOorYMD: eISO, seriesId: null
-          });
-        }
-        return; // done
+    if (hasRepeat) {
+      if (!until) {
+        alert("Para repetir, escolha uma data 'Até'.");
+        return;
       }
-
-      // Repetição: criar em série mas sem bloquear a UI
-      for (const occ of iterateRecurrences(genParams)){
-        i++;
-        if (i > MAX_OCC){
-          alert(`Demasiadas ocorrências geradas (>${MAX_OCC}). Reduza o intervalo ou mude a frequência.`);
-          break;
-        }
-
-        const title = `${type} - ${col}`;
-        if (occ.allDay){
-          await createEventDoc({
-            title, type, colaborador: col, desc, allDay: true,
-            startISOorYMD: occ.startYMD, endISOorYMD: occ.endYMD, seriesId: sid
-          });
-        } else {
-          await createEventDoc({
-            title, type, colaborador: col, desc, allDay: false,
-            startISOorYMD: occ.startISO, endISOorYMD: occ.endISO, seriesId: sid
-          });
-        }
-
-        // pequena pausa a cada 25 gravações para não “congelar” a página
-        if (i % 25 === 0) await sleep(0);
+      if (dateOnlyISO(until) < dateOnlyISO(sY)) {
+        alert("A data 'Até' não pode ser anterior ao início.");
+        return;
       }
-
-      // (opcional) feedback rápido:
-      // alert("Eventos criados com sucesso!");
-
-    } catch (err) {
-      console.error("Falha ao criar eventos:", err);
-      alert("Não foi possível criar o(s) evento(s).\n\nDetalhe: " + (err?.message || err));
     }
-  }, 0);
-});
 
+    closeCreate();
 
+    setTimeout(async () => {
+      try {
+        const sid = hasRepeat ? uuid() : null;
+
+        const genParams = {
+          startYMD: sY,
+          endYMD: eY,
+          startHM: cST.value || "00:00",
+          endHM: cET.value || (cST.value || "00:00"),
+          allDay: allD,
+          freq,
+          untilYMD: until
+        };
+
+        const MAX_OCC = 500;
+        let i = 0;
+
+        if (!hasRepeat) {
+          const title = `${type} - ${col}`;
+          if (allD) {
+            await createEventDoc({
+              title,
+              type,
+              colaborador: col,
+              desc,
+              allDay: true,
+              startISOorYMD: sY,
+              endISOorYMD: eY,
+              seriesId: null
+            });
+          } else {
+            const sISO = toISO(sY, cST.value || "00:00");
+            const eISO = toISO(sY, cET.value || (cST.value || "00:00"));
+            await createEventDoc({
+              title,
+              type,
+              colaborador: col,
+              desc,
+              allDay: false,
+              startISOorYMD: sISO,
+              endISOorYMD: eISO,
+              seriesId: null
+            });
+          }
+          return;
+        }
+
+        for (const occ of iterateRecurrences(genParams)) {
+          i++;
+          if (i > MAX_OCC) {
+            alert(`Demasiadas ocorrências geradas (>${MAX_OCC}). Reduza o intervalo ou mude a frequência.`);
+            break;
+          }
+
+          const title = `${type} - ${col}`;
+          if (occ.allDay) {
+            await createEventDoc({
+              title,
+              type,
+              colaborador: col,
+              desc,
+              allDay: true,
+              startISOorYMD: occ.startYMD,
+              endISOorYMD: occ.endYMD,
+              seriesId: sid
+            });
+          } else {
+            await createEventDoc({
+              title,
+              type,
+              colaborador: col,
+              desc,
+              allDay: false,
+              startISOorYMD: occ.startISO,
+              endISOorYMD: occ.endISO,
+              seriesId: sid
+            });
+          }
+
+          if (i % 25 === 0) await sleep(0);
+        }
+
+      } catch (err) {
+        console.error("Falha ao criar eventos:", err);
+        alert("Não foi possível criar o(s) evento(s).\n\nDetalhe: " + (err?.message || err));
+      }
+    }, 0);
+  });
 
   // ====== EDITAR (tooltip) ======
   function closeEdit() {
     eventModal.classList.add("hidden");
     eventModal.setAttribute("aria-hidden", "true");
   }
+
   eClose.addEventListener("click", closeEdit);
+
   document.addEventListener("click", (e) => {
     if (eventModal.classList.contains("hidden")) return;
     const inside = eventBox.contains(e.target);
@@ -578,138 +723,169 @@ function init() {
     if (!inside && !onEvent) closeEdit();
   });
 
-  // Guardar (editar ocorrência / série) — SÉRIE DE VERDADE
- // EDITAR: fechar tooltip imediatamente e aplicar alterações (ocorrência ou série)
-eSave.addEventListener("click", () => {
-  if (!selectedEvent) return;
+  // EDITAR
+  eSave.addEventListener("click", () => {
+    if (!selectedEvent) return;
 
-  // 1) LER E VALIDAR
-  const type = eType.value, col = eCol.value, desc = eDesc.value;
-  const allD = eAllD.checked;
-  const rep  = eRep.value;                 // none|weekly|monthly|yearly
-  const until= eUntil.value;               // YYYY-MM-DD ou vazio
-  const applySeries = eApplySeries.checked;
-  const curSid = selectedEvent.extendedProps.seriesId || null;
+    const type = eType.value, col = eCol.value, desc = eDesc.value;
+    const allD = eAllD.checked;
+    const rep = eRep.value;
+    const until = eUntil.value;
+    const applySeries = eApplySeries.checked;
+    const curSid = selectedEvent.extendedProps.seriesId || null;
 
-  let sY = eSD.value;
-  let eY = eED.value || sY;
-  let st = eST.value || "00:00";
-  let et = eET.value || st;
+    let sY = eSD.value;
+    let eY = eED.value || sY;
+    let st = eST.value || "00:00";
+    let et = eET.value || st;
 
-  // validação básica
-  if (!type || !col || !sY){
-    alert("Preencha Tipo, Colaborador e Data de início.");
-    return; // mantém tooltip aberto para corrigir
-  }
-  // Se quiser aplicar à série inteira, precisa definir uma repetição e 'Até'
-  if (applySeries && (rep === "none" || !until)){
-    alert("Para aplicar à SÉRIE inteira, escolha um tipo de repetição e a data 'Até'.");
-    return; // mantém tooltip aberto
-  }
-
-  // 2) FECHA o tooltip JÁ (UX)
-  closeEdit();
-
-  // 3) DEPOIS DO REPAINT, executa as operações (sem travar UI)
-  setTimeout(async () => {
-    try {
-      // ===== Caso 1: editar só ESTA ocorrência =====
-      if (!applySeries){
-        if (allD){
-          await updateEventDoc(selectedEvent.id, {
-            title: `${type} - ${col}`, type, colaborador: col, desc,
-            allDay: true, startISOorYMD: sY, endISOorYMD: eY, seriesId: curSid
-          });
-          // refletir no calendário local
-          selectedEvent.setAllDay(true);
-          selectedEvent.setStart(sY);
-          selectedEvent.setEnd(addDaysYYYYMMDD(eY,1));
-        } else {
-          const sISO = toISO(sY, st), eISO = toISO(sY, et);
-          await updateEventDoc(selectedEvent.id, {
-            title: `${type} - ${col}`, type, colaborador: col, desc,
-            allDay: false, startISOorYMD: sISO, endISOorYMD: eISO, seriesId: curSid
-          });
-          selectedEvent.setAllDay(false);
-          selectedEvent.setStart(sISO);
-          selectedEvent.setEnd(eISO);
-        }
-        selectedEvent.setProp("title", `${type} - ${col}`);
-        selectedEvent.setExtendedProp("type", type);
-        selectedEvent.setExtendedProp("colaborador", col);
-        selectedEvent.setExtendedProp("desc", desc);
-        return;
-      }
-
-      // ===== Caso 2: aplicar à SÉRIE inteira (apaga antiga e recria) =====
-      const sid = curSid || uuid();
-
-      // 2.1 Apagar série antiga (de verdade)
-      if (curSid){
-        await deleteWholeSeriesClient(curSid, calendar); // remove de Firestore e do calendário
-      } else {
-        // legado sem seriesId: apaga todos semelhantes (title/type/colab)
-        const oldTitle = selectedEvent.title;
-        const oldType  = selectedEvent.extendedProps?.type || "";
-        const oldCol   = selectedEvent.extendedProps?.colaborador || "";
-        await deleteLegacySeriesAllTime({ title: oldTitle, type: oldType, colaborador: oldCol });
-        // limpar do calendário visível
-        calendar.getEvents().forEach(ev=>{
-          const matches = (ev.title===oldTitle)
-            && ((ev.extendedProps?.type||"")===oldType)
-            && ((ev.extendedProps?.colaborador||"")===oldCol);
-          if (matches) ev.remove();
-        });
-      }
-
-      // 2.2 Recriar série com as novas regras
-      const genParams = {
-        startYMD: sY, endYMD: eY,
-        startHM: st, endHM: et,
-        allDay: allD, freq: rep, untilYMD: until
-      };
-
-      const MAX_OCC = 500;  // segurança
-      let i = 0;
-
-      for (const occ of iterateRecurrences(genParams)){
-        i++;
-        if (i > MAX_OCC){
-          alert(`Demasiadas ocorrências geradas (>${MAX_OCC}). Reduza o intervalo ou mude a frequência.`);
-          break;
-        }
-        const title = `${type} - ${col}`;
-        if (occ.allDay){
-          await createEventDoc({ title, type, colaborador: col, desc, allDay: true,
-            startISOorYMD: occ.startYMD, endISOorYMD: occ.endYMD, seriesId: sid });
-        } else {
-          await createEventDoc({ title, type, colaborador: col, desc, allDay: false,
-            startISOorYMD: occ.startISO, endISOorYMD: occ.endISO, seriesId: sid });
-        }
-        // micro-pausa a cada 25 para não congelar
-        if (i % 25 === 0) await sleep(0);
-      }
-
-      // opcional: toast/alert rápido
-      // alert("Série atualizada com sucesso!");
-    } catch (e){
-      console.error("Falha ao atualizar (ocorrência/série):", e);
-      alert("Não foi possível atualizar o evento.\n\n" + (e?.message || e));
+    if (!type || !col || !sY) {
+      alert("Preencha Tipo, Colaborador e Data de início.");
+      return;
     }
-  }, 0);
-});
 
+    if (applySeries && (rep === "none" || !until)) {
+      alert("Para aplicar à SÉRIE inteira, escolha um tipo de repetição e a data 'Até'.");
+      return;
+    }
 
-  // ====== REMOVER — DELEGAÇÃO DE EVENTO (funciona SEMPRE) ======
+    closeEdit();
+
+    setTimeout(async () => {
+      try {
+        // Só esta ocorrência
+        if (!applySeries) {
+          if (allD) {
+            await updateEventDoc(selectedEvent.id, {
+              title: `${type} - ${col}`,
+              type,
+              colaborador: col,
+              desc,
+              allDay: true,
+              startISOorYMD: sY,
+              endISOorYMD: eY,
+              seriesId: curSid
+            });
+
+            selectedEvent.setAllDay(true);
+            selectedEvent.setStart(sY);
+            selectedEvent.setEnd(addDaysYYYYMMDD(eY, 1));
+          } else {
+            const sISO = toISO(sY, st);
+            const eISO = toISO(sY, et);
+
+            await updateEventDoc(selectedEvent.id, {
+              title: `${type} - ${col}`,
+              type,
+              colaborador: col,
+              desc,
+              allDay: false,
+              startISOorYMD: sISO,
+              endISOorYMD: eISO,
+              seriesId: curSid
+            });
+
+            selectedEvent.setAllDay(false);
+            selectedEvent.setStart(sISO);
+            selectedEvent.setEnd(eISO);
+          }
+
+          selectedEvent.setProp("title", `${type} - ${col}`);
+          selectedEvent.setExtendedProp("type", type);
+          selectedEvent.setExtendedProp("colaborador", col);
+          selectedEvent.setExtendedProp("desc", desc);
+          return;
+        }
+
+        // Série inteira
+        const sid = curSid || uuid();
+
+        if (curSid) {
+          await deleteWholeSeriesClient(curSid, calendar);
+        } else {
+          const oldTitle = selectedEvent.title;
+          const oldType = selectedEvent.extendedProps?.type || "";
+          const oldCol = selectedEvent.extendedProps?.colaborador || "";
+
+          await deleteLegacySeriesAllTime({ title: oldTitle, type: oldType, colaborador: oldCol });
+
+          calendar.getEvents().forEach(ev => {
+            const matches = (ev.title === oldTitle)
+              && ((ev.extendedProps?.type || "") === oldType)
+              && ((ev.extendedProps?.colaborador || "") === oldCol);
+            if (matches) ev.remove();
+          });
+        }
+
+        const genParams = {
+          startYMD: sY,
+          endYMD: eY,
+          startHM: st,
+          endHM: et,
+          allDay: allD,
+          freq: rep,
+          untilYMD: until
+        };
+
+        const MAX_OCC = 500;
+        let i = 0;
+
+        for (const occ of iterateRecurrences(genParams)) {
+          i++;
+          if (i > MAX_OCC) {
+            alert(`Demasiadas ocorrências geradas (>${MAX_OCC}). Reduza o intervalo ou mude a frequência.`);
+            break;
+          }
+
+          const title = `${type} - ${col}`;
+
+          if (occ.allDay) {
+            await createEventDoc({
+              title,
+              type,
+              colaborador: col,
+              desc,
+              allDay: true,
+              startISOorYMD: occ.startYMD,
+              endISOorYMD: occ.endYMD,
+              seriesId: sid
+            });
+          } else {
+            await createEventDoc({
+              title,
+              type,
+              colaborador: col,
+              desc,
+              allDay: false,
+              startISOorYMD: occ.startISO,
+              endISOorYMD: occ.endISO,
+              seriesId: sid
+            });
+          }
+
+          if (i % 25 === 0) await sleep(0);
+        }
+
+      } catch (e) {
+        console.error("Falha ao atualizar (ocorrência/série):", e);
+        alert("Não foi possível atualizar o evento.\n\n" + (e?.message || e));
+      }
+    }, 0);
+  });
+
+  // ====== REMOVER ======
   document.addEventListener("click", async (ev) => {
     const btn = ev.target.closest && ev.target.closest("#modalDelete");
-    if (!btn) return; // não é o botão Remover
+    if (!btn) return;
     ev.preventDefault();
 
     if (!selectedEvent) return;
 
-    const choice = await chooseDeleteChoice(); // 'all' | 'one' | 'cancel'
-    if (choice === "cancel") { closeEdit(); return; }
+    const choice = await chooseDeleteChoice();
+    if (choice === "cancel") {
+      closeEdit();
+      return;
+    }
 
     const sid = selectedEvent.extendedProps?.seriesId || null;
 
@@ -721,22 +897,19 @@ eSave.addEventListener("click", () => {
       return;
     }
 
-    // choice === "all"
     if (sid) {
-      await deleteWholeSeriesClient(sid, calendar); // apaga tudo no Firestore e remove do calendário
+      await deleteWholeSeriesClient(sid, calendar);
       selectedEvent = null;
       closeEdit();
       return;
     }
 
-    // Sem seriesId (legado): apaga todos semelhantes (title/type/colaborador)
     const title = selectedEvent.title;
     const type = selectedEvent.extendedProps?.type || "";
     const col = selectedEvent.extendedProps?.colaborador || "";
 
     await deleteLegacySeriesAllTime({ title, type, colaborador: col });
 
-    // Remove todos os visíveis no calendário também
     calendar.getEvents().forEach(ev2 => {
       const matches = (ev2.title === title)
         && ((ev2.extendedProps?.type || "") === type)
@@ -748,10 +921,10 @@ eSave.addEventListener("click", () => {
     closeEdit();
   });
 
-  // ====== PDF (mini-relatório da VISTA atual) ======
+  // ====== PDF ======
   document.getElementById("exportBtn").addEventListener("click", () => {
     const viewStart = calendar.view.activeStart;
-    const viewEnd = calendar.view.activeEnd; // exclusivo
+    const viewEnd = calendar.view.activeEnd;
     const inView = calendar.getEvents().filter(ev => isEventInCurrentView(ev, viewStart, viewEnd));
 
     const rows = inView
@@ -772,11 +945,14 @@ eSave.addEventListener("click", () => {
     const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
 
     const title = "Relatório do Calendário (vista atual)";
-    doc.setFontSize(14); doc.text(title, 40, 40);
+    doc.setFontSize(14);
+    doc.text(title, 40, 40);
     doc.setFontSize(10);
+
     const rangeStr = `${toYYYYMMDD(viewStart)} a ${toYYYYMMDD(new Date(viewEnd.getTime() - 1))}`;
     const fTipo = document.getElementById("filterType").value || "Todos";
     const fCol = document.getElementById("filterColab").value || "Todos";
+
     doc.text(`Período: ${rangeStr}`, 40, 58);
     doc.text(`Filtro Tipo: ${fTipo} | Filtro Colaborador: ${fCol}`, 40, 72);
     doc.text(`Total de eventos: ${rows.length}`, 40, 86);
@@ -785,10 +961,18 @@ eSave.addEventListener("click", () => {
     const body = rows.map(r => [r.date, r.time, r.tipo, r.col, r.desc]);
 
     doc.autoTable({
-      startY: 100, head, body,
+      startY: 100,
+      head,
+      body,
       styles: { fontSize: 9, cellPadding: 4 },
-      headStyles: { fillColor: [123, 108, 255] }, /* lilás-azulado */
-      columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 70 }, 2: { cellWidth: 90 }, 3: { cellWidth: 90 }, 4: { cellWidth: 200 } },
+      headStyles: { fillColor: [123, 108, 255] },
+      columnStyles: {
+        0: { cellWidth: 80 },
+        1: { cellWidth: 70 },
+        2: { cellWidth: 90 },
+        3: { cellWidth: 90 },
+        4: { cellWidth: 200 }
+      },
       didDrawPage: () => {
         const str = `Página ${doc.internal.getNumberOfPages()}`;
         doc.setFontSize(9);
@@ -800,7 +984,7 @@ eSave.addEventListener("click", () => {
   });
 }
 
-// Corre init de forma robusta (DOM já carregado ou não)
+// Corre init de forma robusta
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
 } else {
